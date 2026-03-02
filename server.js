@@ -10,15 +10,44 @@ app.use(express.json({ limit: "1mb" }));
 
 const PORT = 1777;
 const LOGO_PATH = path.join(__dirname, "logo.png");
-const LOGO_WIDTH_PX = 280; // small-medium default
+const LOGO_WIDTH_PX = 280; // fallback for smaller printers
 // Printer settings (tune these)
 const PRINT_WIDTH_DOTS = Number(process.env.PRINT_WIDTH_DOTS || 384); // try 384 or 576
-const LOGO_MAX_WIDTH_DOTS = Number(process.env.LOGO_MAX_WIDTH_DOTS || (PRINT_WIDTH_DOTS - 16));
+const LOGO_MAX_WIDTH_DOTS = Number(process.env.LOGO_MAX_WIDTH_DOTS || Math.min(PRINT_WIDTH_DOTS - 16, LOGO_WIDTH_PX));
+const LOGO_MAX_HEIGHT_DOTS = Number(process.env.LOGO_MAX_HEIGHT_DOTS || Math.floor(LOGO_MAX_WIDTH_DOTS * 0.45));
+const LOGO_SCALE = Number(process.env.LOGO_SCALE || 0.9);
 let logoBuffer = null;
 
-// --- Load logo if exists on startup ---
-if (fs.existsSync(LOGO_PATH)) {
-  logoBuffer = fs.readFileSync(LOGO_PATH);
+function getLogoBounds() {
+  const safeScale = Number.isFinite(LOGO_SCALE) && LOGO_SCALE > 0 ? LOGO_SCALE : 1;
+  return {
+    width: Math.max(1, Math.floor(LOGO_MAX_WIDTH_DOTS * safeScale)),
+    height: Math.max(1, Math.floor(LOGO_MAX_HEIGHT_DOTS * safeScale))
+  };
+}
+
+async function processLogoBuffer(inputBuffer) {
+  const { width, height } = getLogoBounds();
+  return sharp(inputBuffer)
+    .resize({
+      width,
+      height,
+      fit: "inside",
+      withoutEnlargement: true
+    })
+    .flatten({ background: "#ffffff" }) // remove transparency
+    .grayscale()
+    .threshold(180) // tune 140-210 if needed
+    .png()
+    .toBuffer();
+}
+
+async function refreshLogoFromDisk() {
+  if (!fs.existsSync(LOGO_PATH)) return;
+  const current = fs.readFileSync(LOGO_PATH);
+  const processed = await processLogoBuffer(current);
+  fs.writeFileSync(LOGO_PATH, processed);
+  logoBuffer = processed;
 }
 
 // --- Helper: Save logo from base64 ---
@@ -28,18 +57,7 @@ async function saveLogo(base64) {
     : base64;
 
   const inputBuffer = Buffer.from(clean, "base64");
-
-  const resized = await sharp(inputBuffer)
-    .resize({
-      width: LOGO_MAX_WIDTH_DOTS,     // treat dots as px, close enough for ESC/POS raster
-      fit: "inside",
-      withoutEnlargement: true
-    })
-    .flatten({ background: "#ffffff" }) // remove transparency
-    .grayscale()
-    .threshold(180) // tune 140-210 if needed
-    .png()
-    .toBuffer();
+  const resized = await processLogoBuffer(inputBuffer);
 
   fs.writeFileSync(LOGO_PATH, resized);
   logoBuffer = resized;
@@ -229,6 +247,12 @@ app.post("/print", async (req, res) => {
 
 app.get("/health", (req, res) => res.json({ ok: true }));
 
-app.listen(PORT, () =>
-  console.log(`USB Print Server running at http://localhost:${PORT}`)
-);
+refreshLogoFromDisk()
+  .catch((e) => {
+    console.error("Failed to normalize existing logo:", e.message);
+  })
+  .finally(() => {
+    app.listen(PORT, () =>
+      console.log(`USB Print Server running at http://localhost:${PORT}`)
+    );
+  });
