@@ -1,6 +1,6 @@
 const express = require("express");
 const escpos = require("escpos");
-escpos.USB = require("./lib/escpos-usb-compat");
+escpos.USB = require("escpos-usb");
 const sharp = require("sharp");
 const fs = require("fs");
 const path = require("path");
@@ -11,7 +11,9 @@ app.use(express.json({ limit: "1mb" }));
 const PORT = 1777;
 const LOGO_PATH = path.join(__dirname, "logo.png");
 const LOGO_WIDTH_PX = 280; // small-medium default
-
+// Printer settings (tune these)
+const PRINT_WIDTH_DOTS = Number(process.env.PRINT_WIDTH_DOTS || 384); // try 384 or 576
+const LOGO_MAX_WIDTH_DOTS = Number(process.env.LOGO_MAX_WIDTH_DOTS || (PRINT_WIDTH_DOTS - 16));
 let logoBuffer = null;
 
 // --- Load logo if exists on startup ---
@@ -28,7 +30,14 @@ async function saveLogo(base64) {
   const inputBuffer = Buffer.from(clean, "base64");
 
   const resized = await sharp(inputBuffer)
-    .resize({ width: LOGO_WIDTH_PX })
+    .resize({
+      width: LOGO_MAX_WIDTH_DOTS,     // treat dots as px, close enough for ESC/POS raster
+      fit: "inside",
+      withoutEnlargement: true
+    })
+    .flatten({ background: "#ffffff" }) // remove transparency
+    .grayscale()
+    .threshold(180) // tune 140-210 if needed
     .png()
     .toBuffer();
 
@@ -52,37 +61,127 @@ function printLabel(data) {
       };
 
       try {
-        // 1️⃣ Print logo first (if exists)
-        if (logoBuffer) {
-          escpos.Image.load(logoBuffer, (image) => {
-            printer.image(image, "s8");
-            printer.text("");
-            printText();
+        if (fs.existsSync(LOGO_PATH)) {
+          escpos.Image.load(LOGO_PATH, (image) => {
+            printer.align("CT");
+            printer.image(image, "d8");
+            printer.align("LT");
+            printer.feed(1);
+
+            printByTemplate(printer, data);
+            finish();
           });
         } else {
-          printText();
-        }
-
-        function printText() {
-          printer
-            .style("B")
-            .size(1, 1)
-            .text(data.customer || "")
-            .style("NORMAL")
-            .text(`${data.item || ""} x${data.qty ?? 1}`);
-
-          if (Array.isArray(data.mods)) {
-            data.mods.forEach((m) => printer.text(m));
-          }
-
+          printByTemplate(printer, data);
           finish();
         }
       } catch (e) {
-        printer.close();
+        try { printer.close(); } catch {}
         reject(e);
       }
     });
   });
+}
+
+function printByTemplate(printer, data) {
+  const t = data.template || "cup";
+
+  // choose line width based on printer width
+  const cols = PRINT_WIDTH_DOTS >= 560 ? 48 : 32;
+
+  if (t === "cup") {
+    printer.align("CT").style("B").size(2, 2);
+    printWrapped(printer, data.customer || "", cols);
+    printer.size(1, 1).style("NORMAL");
+
+    sep(printer, "-", cols);
+
+    printer.align("LT").style("B");
+    printWrapped(printer, `${data.item || ""} x${data.qty ?? 1}`, cols);
+    printer.style("NORMAL");
+
+    if (Array.isArray(data.mods) && data.mods.length) {
+      printer.feed(1);
+      printMods(printer, data.mods, cols);
+    }
+
+    if (data.note) {
+      printer.feed(1);
+      printer.align("LT").style("B").text("NOTE:");
+      printer.style("NORMAL");
+      printWrapped(printer, data.note, cols);
+    }
+
+    printer.feed(1);
+    return;
+  }
+
+  if (t === "kitchen") {
+    printer.align("CT").style("B").size(2, 2);
+    printWrapped(printer, data.item || "", cols);
+    printer.size(1, 1);
+
+    printer.align("LT").style("B");
+    printer.text(`QTY: ${data.qty ?? 1}`);
+    printer.text(`NAME: ${data.customer || ""}`);
+    printer.style("NORMAL");
+
+    sep(printer, "=", cols);
+
+    if (Array.isArray(data.mods) && data.mods.length) {
+      printer.style("B").text("MODS:");
+      printer.style("NORMAL");
+      printMods(printer, data.mods, cols);
+    }
+
+    if (data.instructions) {
+      printer.feed(1);
+      printer.style("B").text("INSTRUCTIONS:");
+      printer.style("NORMAL");
+      printWrapped(printer, data.instructions, cols);
+    }
+
+    printer.feed(1);
+    return;
+  }
+
+  if (t === "simple") {
+    printer.align("LT").style("B");
+    printWrapped(printer, `${data.item || ""} x${data.qty ?? 1}`, cols);
+    printer.style("NORMAL");
+    if (data.customer) printWrapped(printer, data.customer, cols);
+    if (Array.isArray(data.mods)) printMods(printer, data.mods, cols);
+    printer.feed(1);
+    return;
+  }
+
+  // fallback
+  printer.align("LT");
+  printWrapped(printer, JSON.stringify(data), cols);
+  printer.feed(1);
+}
+
+function sep(printer, ch = "-", count = 32) {
+  printer.text(ch.repeat(count));
+}
+
+function wrapLine(s, max = 32) {
+  const str = String(s ?? "");
+  const out = [];
+  let i = 0;
+  while (i < str.length) {
+    out.push(str.slice(i, i + max));
+    i += max;
+  }
+  return out.length ? out : [""];
+}
+
+function printWrapped(printer, text, max = 32) {
+  wrapLine(text, max).forEach((l) => printer.text(l));
+}
+
+function printMods(printer, mods = [], max = 32) {
+  mods.forEach((m) => printWrapped(printer, `- ${m}`, max));
 }
 
 function renderLabelLines(payload) {
