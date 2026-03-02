@@ -1,6 +1,6 @@
 const express = require("express");
 const escpos = require("escpos");
-escpos.USB = require("escpos-usb");
+escpos.USB = require("./lib/escpos-usb-compat");
 const sharp = require("sharp");
 const fs = require("fs");
 const path = require("path");
