@@ -14,6 +14,8 @@ const LOGO_WIDTH_PX = 280; // small-medium default
 // Printer settings (tune these)
 const PRINT_WIDTH_DOTS = Number(process.env.PRINT_WIDTH_DOTS || 384); // try 384 or 576
 const LOGO_MAX_WIDTH_DOTS = Number(process.env.LOGO_MAX_WIDTH_DOTS || (PRINT_WIDTH_DOTS - 16));
+const LOGO_MAX_HEIGHT_DOTS = Number(process.env.LOGO_MAX_HEIGHT_DOTS || Math.floor(LOGO_MAX_WIDTH_DOTS * 0.45));
+const LOGO_SCALE = Number(process.env.LOGO_SCALE || 0.9);
 let logoBuffer = null;
 
 // --- Load logo if exists on startup ---
@@ -29,9 +31,13 @@ async function saveLogo(base64) {
 
   const inputBuffer = Buffer.from(clean, "base64");
 
+  const scaledMaxWidth = Math.max(1, Math.floor(LOGO_MAX_WIDTH_DOTS * LOGO_SCALE));
+  const scaledMaxHeight = Math.max(1, Math.floor(LOGO_MAX_HEIGHT_DOTS * LOGO_SCALE));
+
   const resized = await sharp(inputBuffer)
     .resize({
-      width: LOGO_MAX_WIDTH_DOTS,     // treat dots as px, close enough for ESC/POS raster
+      width: scaledMaxWidth,
+      height: scaledMaxHeight,
       fit: "inside",
       withoutEnlargement: true
     })
