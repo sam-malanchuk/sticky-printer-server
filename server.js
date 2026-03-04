@@ -10,14 +10,13 @@ app.use(express.json({ limit: "1mb" }));
 
 const PORT = 1777;
 const LOGO_PATH = path.join(__dirname, "logo.png");
-const LOGO_WIDTH_PX = 280; // fallback for smaller printers
 const USB_VENDOR_ID = Number(process.env.USB_VENDOR_ID || 0x04b8);
 const USB_PRODUCT_ID = Number(process.env.USB_PRODUCT_ID || 0x0202);
 const USB_BUS_NUMBER = Number(process.env.USB_BUS_NUMBER || 0);
 const USB_DEVICE_ADDRESS = Number(process.env.USB_DEVICE_ADDRESS || 0);
 // Printer settings (tune these)
 const PRINT_WIDTH_DOTS = Number(process.env.PRINT_WIDTH_DOTS || 384); // try 384 or 576
-const LOGO_MAX_WIDTH_DOTS = Number(process.env.LOGO_MAX_WIDTH_DOTS || Math.min(PRINT_WIDTH_DOTS - 16, LOGO_WIDTH_PX));
+const LOGO_MAX_WIDTH_DOTS = Number(process.env.LOGO_MAX_WIDTH_DOTS || Math.max(1, PRINT_WIDTH_DOTS - 16));
 const LOGO_MAX_HEIGHT_DOTS = Number(process.env.LOGO_MAX_HEIGHT_DOTS || Math.floor(LOGO_MAX_WIDTH_DOTS * 0.45));
 const LOGO_SCALE = Number(process.env.LOGO_SCALE || 0.9);
 let logoBuffer = null;
