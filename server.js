@@ -87,6 +87,12 @@ function printLabel(data) {
             printer.feed(1);
 
             printByTemplate(printer, data);
+            printer.feed(1);
+            printer.feed(1);
+            printer.cut();
+            printer.feed(1);
+            printer.feed(1);
+            printer.feed(1);
             finish();
           });
         } else {
