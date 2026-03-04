@@ -15,7 +15,7 @@ const USB_PRODUCT_ID = Number(process.env.USB_PRODUCT_ID || 0x0202);
 const USB_BUS_NUMBER = Number(process.env.USB_BUS_NUMBER || 0);
 const USB_DEVICE_ADDRESS = Number(process.env.USB_DEVICE_ADDRESS || 0);
 // Printer settings (tune these)
-const PRINT_WIDTH_DOTS = Number(process.env.PRINT_WIDTH_DOTS || 384); // try 384 or 576
+const PRINT_WIDTH_DOTS = Number(process.env.PRINT_WIDTH_DOTS || 576); // try 384 or 576
 const LOGO_MAX_WIDTH_DOTS = Number(process.env.LOGO_MAX_WIDTH_DOTS || Math.max(1, PRINT_WIDTH_DOTS - 16));
 const LOGO_MAX_HEIGHT_DOTS = Number(process.env.LOGO_MAX_HEIGHT_DOTS || Math.floor(LOGO_MAX_WIDTH_DOTS * 0.45));
 const LOGO_SCALE = Number(process.env.LOGO_SCALE || 0.9);
