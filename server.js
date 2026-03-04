@@ -1,6 +1,6 @@
 const express = require("express");
 const escpos = require("escpos");
-escpos.USB = require("escpos-usb");
+escpos.USB = require("./lib/escpos-usb-compat");
 const sharp = require("sharp");
 const fs = require("fs");
 const path = require("path");
@@ -11,6 +11,10 @@ app.use(express.json({ limit: "1mb" }));
 const PORT = 1777;
 const LOGO_PATH = path.join(__dirname, "logo.png");
 const LOGO_WIDTH_PX = 280; // fallback for smaller printers
+const USB_VENDOR_ID = Number(process.env.USB_VENDOR_ID || 0x04b8);
+const USB_PRODUCT_ID = Number(process.env.USB_PRODUCT_ID || 0x0202);
+const USB_BUS_NUMBER = Number(process.env.USB_BUS_NUMBER || 0);
+const USB_DEVICE_ADDRESS = Number(process.env.USB_DEVICE_ADDRESS || 0);
 // Printer settings (tune these)
 const PRINT_WIDTH_DOTS = Number(process.env.PRINT_WIDTH_DOTS || 384); // try 384 or 576
 const LOGO_MAX_WIDTH_DOTS = Number(process.env.LOGO_MAX_WIDTH_DOTS || Math.min(PRINT_WIDTH_DOTS - 16, LOGO_WIDTH_PX));
@@ -66,7 +70,7 @@ async function saveLogo(base64) {
 // --- Print function ---
 function printLabel(data) {
   return new Promise((resolve, reject) => {
-    const device = new escpos.USB(0x04b8, 0x0202);
+    const device = createUsbDevice();
     const printer = new escpos.Printer(device);
 
     device.open((err) => {
@@ -105,6 +109,39 @@ function printLabel(data) {
       }
     });
   });
+}
+
+function createUsbDevice() {
+  const printers = typeof escpos.USB.findPrinter === "function"
+    ? escpos.USB.findPrinter()
+    : [];
+
+  const matchingVidPid = printers.filter((usbDevice) => {
+    const descriptor = usbDevice.deviceDescriptor || {};
+    return (
+      descriptor.idVendor === USB_VENDOR_ID &&
+      descriptor.idProduct === USB_PRODUCT_ID
+    );
+  });
+
+  const matchingAddress =
+    USB_BUS_NUMBER > 0 && USB_DEVICE_ADDRESS > 0
+      ? matchingVidPid.find(
+          (usbDevice) =>
+            usbDevice.busNumber === USB_BUS_NUMBER &&
+            usbDevice.deviceAddress === USB_DEVICE_ADDRESS
+        )
+      : null;
+
+  if (matchingAddress) {
+    return new escpos.USB(matchingAddress);
+  }
+
+  if (matchingVidPid.length > 0) {
+    return new escpos.USB(matchingVidPid[0]);
+  }
+
+  return new escpos.USB(USB_VENDOR_ID, USB_PRODUCT_ID);
 }
 
 function printByTemplate(printer, data) {
