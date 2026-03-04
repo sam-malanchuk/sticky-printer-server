@@ -91,11 +91,7 @@ function printLabel(data) {
             printer.feed(1);
 
             printByTemplate(printer, data);
-            printer.feed(1);
-            printer.feed(1);
             printer.cut();
-            printer.feed(1);
-            printer.feed(1);
             printer.feed(1);
             finish();
           });
@@ -104,7 +100,7 @@ function printLabel(data) {
           finish();
         }
       } catch (e) {
-        try { printer.close(); } catch {}
+        try { printer.close(); } catch { }
         reject(e);
       }
     });
@@ -127,10 +123,10 @@ function createUsbDevice() {
   const matchingAddress =
     USB_BUS_NUMBER > 0 && USB_DEVICE_ADDRESS > 0
       ? matchingVidPid.find(
-          (usbDevice) =>
-            usbDevice.busNumber === USB_BUS_NUMBER &&
-            usbDevice.deviceAddress === USB_DEVICE_ADDRESS
-        )
+        (usbDevice) =>
+          usbDevice.busNumber === USB_BUS_NUMBER &&
+          usbDevice.deviceAddress === USB_DEVICE_ADDRESS
+      )
       : null;
 
   if (matchingAddress) {
@@ -151,26 +147,40 @@ function printByTemplate(printer, data) {
   const cols = PRINT_WIDTH_DOTS >= 560 ? 48 : 32;
 
   if (t === "cup") {
-    printer.align("CT").style("B").size(2, 2);
-    printWrapped(printer, data.customer || "", cols);
-    printer.size(1, 1).style("NORMAL");
 
-    sep(printer, "-", cols);
+    // NAME
+    printer.align("CT")
+      .style("B")
+      .size(2, 2)
+      .text(data.customer || "");
 
-    printer.align("LT").style("B");
-    printWrapped(printer, `${data.item || ""} x${data.qty ?? 1}`, cols);
+    printer.size(1, 1);
+    sep(printer);
+
+    // DRINK
+    printer.align("LT")
+      .style("B")
+      .text(data.item || "");
+
     printer.style("NORMAL");
 
-    if (Array.isArray(data.mods) && data.mods.length) {
-      printer.feed(1);
-      printMods(printer, data.mods, cols);
+    if (data.size) {
+      printer.text(`SIZE: ${data.size}`);
     }
 
+    sep(printer);
+
+    // MODIFIERS
+    if (Array.isArray(data.mods) && data.mods.length) {
+      data.mods.forEach(m => printer.text(m));
+    }
+
+    sep(printer);
+
+    // NOTE
     if (data.note) {
-      printer.feed(1);
-      printer.align("LT").style("B").text("NOTE:");
-      printer.style("NORMAL");
-      printWrapped(printer, data.note, cols);
+      printer.style("B").text("NOTE:");
+      printer.style("NORMAL").text(data.note);
     }
 
     printer.feed(1);
@@ -187,7 +197,7 @@ function printByTemplate(printer, data) {
     printer.text(`NAME: ${data.customer || ""}`);
     printer.style("NORMAL");
 
-    sep(printer, "=", cols);
+    sep(printer);
 
     if (Array.isArray(data.mods) && data.mods.length) {
       printer.style("B").text("MODS:");
@@ -222,7 +232,9 @@ function printByTemplate(printer, data) {
   printer.feed(1);
 }
 
-function sep(printer, ch = "-", count = 32) {
+function sep(printer, ch = "-") {
+  const count = PRINT_WIDTH_DOTS >= 560 ? 40 : 24;
+  printer.align("LT");   // reset alignment
   printer.text(ch.repeat(count));
 }
 
