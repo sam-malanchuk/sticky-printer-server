@@ -22,7 +22,8 @@ npm start
 
 ## Data example
 
-```{
+```
+{
   "template": "cup",
   "customer": "Tommy James",
   "item": "Refresher",
