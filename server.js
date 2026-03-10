@@ -4,6 +4,7 @@ escpos.USB = require("./lib/escpos-usb-compat");
 const sharp = require("sharp");
 const fs = require("fs");
 const path = require("path");
+const DEFAULT_LOGO_BASE64 = require("./lib/default-logo-base64");
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -64,6 +65,15 @@ async function saveLogo(base64) {
 
   fs.writeFileSync(LOGO_PATH, resized);
   logoBuffer = resized;
+}
+
+async function ensureDefaultLogo() {
+  if (fs.existsSync(LOGO_PATH)) {
+    await refreshLogoFromDisk();
+    return;
+  }
+
+  await saveLogo(DEFAULT_LOGO_BASE64);
 }
 
 // --- Print function ---
@@ -301,9 +311,9 @@ app.post("/print", async (req, res) => {
 
 app.get("/health", (req, res) => res.json({ ok: true }));
 
-refreshLogoFromDisk()
+ensureDefaultLogo()
   .catch((e) => {
-    console.error("Failed to normalize existing logo:", e.message);
+    console.error("Failed to initialize default logo:", e.message);
   })
   .finally(() => {
     app.listen(PORT, () =>
