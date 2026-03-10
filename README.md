@@ -14,6 +14,23 @@ npm install
 npm start
 ```
 
+
+## Windows compatibility
+
+This project can run on Windows, but USB printer access needs one-time setup:
+
+- Install a supported Node.js LTS version (Node 20+ recommended).
+- Install dependencies with `npm install`.
+- Start with `npm start` (uses `node server.js`).
+- If USB access fails, bind the printer USB interface to a libusb-compatible driver (for example, WinUSB with Zadig) so the `usb` package can open it.
+
+### Device selection behavior
+
+- The server always matches by `USB_VENDOR_ID` + `USB_PRODUCT_ID`.
+- On Linux and macOS, printer-class USB discovery is used when available.
+- On Windows, some printers expose vendor-specific interfaces instead of printer class; the server now falls back to scanning all USB devices and still matches by VID/PID.
+- If multiple devices share the same VID/PID, also set `USB_BUS_NUMBER` and `USB_DEVICE_ADDRESS` when your platform provides stable values.
+
 ## Notes
 
 - `node_modules/` is ignored via `.gitignore` and will not be committed.

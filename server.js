@@ -117,11 +117,16 @@ function printLabel(data) {
 }
 
 function createUsbDevice() {
-  const printers = typeof escpos.USB.findPrinter === "function"
-    ? escpos.USB.findPrinter()
-    : [];
+  const findPrinterDevices =
+    typeof escpos.USB.findPrinter === "function"
+      ? escpos.USB.findPrinter()
+      : [];
 
-  const matchingVidPid = printers.filter((usbDevice) => {
+  const allUsbDevices = typeof escpos.USB.getDeviceList === "function"
+    ? escpos.USB.getDeviceList()
+    : findPrinterDevices;
+
+  const matchingVidPid = allUsbDevices.filter((usbDevice) => {
     const descriptor = usbDevice.deviceDescriptor || {};
     return (
       descriptor.idVendor === USB_VENDOR_ID &&
@@ -144,6 +149,18 @@ function createUsbDevice() {
 
   if (matchingVidPid.length > 0) {
     return new escpos.USB(matchingVidPid[0]);
+  }
+
+  const fallbackPrinterMatch = findPrinterDevices.find((usbDevice) => {
+    const descriptor = usbDevice.deviceDescriptor || {};
+    return (
+      descriptor.idVendor === USB_VENDOR_ID &&
+      descriptor.idProduct === USB_PRODUCT_ID
+    );
+  });
+
+  if (fallbackPrinterMatch) {
+    return new escpos.USB(fallbackPrinterMatch);
   }
 
   return new escpos.USB(USB_VENDOR_ID, USB_PRODUCT_ID);
